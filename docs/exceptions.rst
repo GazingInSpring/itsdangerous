@@ -3,6 +3,12 @@
 Exceptions
 ==========
 
+.. note::
+
+   For guidance on catching exceptions safely — including the exception
+   hierarchy and pitfalls to avoid — see the
+   :ref:`handling-exceptions` section in :doc:`/concepts`.
+
 .. autoexception:: BadData
     :members:
 

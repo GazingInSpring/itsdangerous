@@ -52,6 +52,26 @@ One way to generate a key is to use :func:`os.urandom`.
 
     $ python3 -c 'import os; print(os.urandom(16).hex())'
 
+.. warning::
+
+    itsdangerous **signs** data but does not encrypt it. The payload is
+    encoded (base64) but not secret — anyone who receives a token can
+    decode and read its contents. Do not place sensitive data such as
+    passwords or personally identifiable information inside a token unless
+    you also encrypt it separately.
+
+If you suspect your secret key has been compromised, replace it with a
+single new key rather than appending to the rotation list. Passing a
+list allows tokens signed by older keys to remain valid during the
+overlap window — that is intentional for graceful rollover, but is the
+wrong choice when you need to invalidate all existing tokens immediately.
+
+Signed tokens are credentials: anyone who possesses a token can present
+it for the lifetime of the signing key. Do not log token values, include
+them in error responses, or expose them in places where unintended
+parties can read them (for example, server-side access logs that capture
+full URLs will capture any token embedded in a query string).
+
 
 The Salt
 --------
@@ -97,6 +117,21 @@ Only the serializer with the same salt can load the data.
     s2.loads(s2.dumps(42))
     42
 
+.. warning::
+
+    The salt is a **static, deterministic context label** — it is not
+    per-token randomness and does not behave like a nonce or IV.
+    Its sole purpose is to namespace signing keys so that tokens
+    issued in one context cannot be replayed in another.
+
+    Setting ``key_derivation="none"`` on a :class:`~itsdangerous.signer.Signer`
+    disables key derivation entirely: the raw secret key is used as-is and the
+    salt is **completely ignored**. Two signers that share the same secret key
+    but use different salts will produce identical signatures, making the
+    context-separation guarantee described above worthless. This mode is
+    discouraged; use the default ``django-concat`` mode unless you have a
+    specific reason to override it.
+
 
 Key Rotation
 ------------
@@ -132,6 +167,65 @@ a validation error.
 
     s = Serializer(SECRET_KEYS)
     s.loads(t)  # valid even though it was signed with a previous key
+
+Note that :exc:`~itsdangerous.exc.SignatureExpired` is raised immediately
+regardless of how many keys are in the rotation list. If a token's
+timestamp has expired under the newest key, it is expired under every
+key — itsdangerous does not try additional keys after a timeout failure.
+Key rotation does not extend a token's lifetime.
+
+
+.. _handling-exceptions:
+
+Handling Exceptions
+-------------------
+
+All exceptions raised by itsdangerous inherit from
+:exc:`~itsdangerous.exc.BadData`, which is the safe catch-all for any
+verification failure. The hierarchy is:
+
+-   :exc:`~itsdangerous.exc.BadData` — base class for all failures
+-   :exc:`~itsdangerous.exc.BadSignature` — signature missing or does
+    not match; subclass of ``BadData``; carries ``.payload``
+-   :exc:`~itsdangerous.exc.BadTimeSignature` — timestamp is missing or
+    malformed; subclass of ``BadSignature``; carries ``.payload`` and
+    ``.date_signed``
+-   :exc:`~itsdangerous.exc.SignatureExpired` — timestamp exceeded
+    ``max_age``; subclass of ``BadTimeSignature``
+-   :exc:`~itsdangerous.exc.BadHeader` — signed header is invalid;
+    subclass of ``BadSignature``; carries ``.payload``, ``.header``, and
+    ``.original_error``
+-   :exc:`~itsdangerous.exc.BadPayload` — payload cannot be
+    deserialized; subclass of ``BadData``; carries ``.original_error``
+
+Catch :exc:`~itsdangerous.exc.BadData` (or a more specific subclass) and
+treat every failure as an untrusted or expired token:
+
+.. code-block:: python
+
+    from itsdangerous import BadData
+
+    try:
+        data = s.loads(token)
+    except BadData:
+        # Treat as invalid: redirect to login, return 400/403, etc.
+        ...
+
+A few pitfalls to avoid:
+
+-   **Do not surface exception details to users.**
+    :exc:`~itsdangerous.exc.BadSignature` and its subclasses carry a
+    ``payload`` attribute with the unverified decoded data;
+    :exc:`~itsdangerous.exc.BadHeader` and
+    :exc:`~itsdangerous.exc.BadPayload` also carry an ``original_error``
+    attribute. Neither should be forwarded to the client or included in
+    HTTP responses.
+-   **Do not catch ``Exception`` broadly.** Swallowing ``BadData`` with a
+    bare ``except Exception: pass`` silently turns a failed security check
+    into a no-op.
+-   **``BadTimeSignature.date_signed``** is available even when the
+    signature is otherwise intact. It is useful for logging, but it comes
+    from the token itself and must not be trusted for security decisions.
 
 
 Digest Method Security
