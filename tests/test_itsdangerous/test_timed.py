@@ -92,6 +92,18 @@ class TestTimestampSigner(FreezeMixin, TestSigner):
 
         assert isinstance(exc_info.value.date_signed, datetime)
 
+    def test_secret_keys_expired(self, ts, freeze):
+        # Token signed with old key is expired even when rotation list includes old key.
+        old_signer = TimestampSigner("old-key")
+        signed = old_signer.sign("value")
+        freeze.tick(timedelta(seconds=20))
+        rotation_signer = TimestampSigner(["old-key", "new-key"])
+
+        with pytest.raises(SignatureExpired) as exc_info:
+            rotation_signer.unsign(signed, max_age=10)
+
+        assert exc_info.value.date_signed == ts
+
 
 class TestTimedSerializer(FreezeMixin, TestSerializer):
     @pytest.fixture()

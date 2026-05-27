@@ -6,7 +6,8 @@
 
 Various helpers to pass data to untrusted environments and to get it
 back safe and sound. Data is cryptographically signed to ensure that a
-token has not been tampered with.
+token has not been tampered with. Signing is not encryption: the payload
+is readable by anyone who holds the token; only its integrity is protected.
 
 It's possible to customize how data is serialized. Data is compressed as
 needed. A timestamp can be added and verified automatically while

@@ -5,6 +5,24 @@ Unreleased
 
 -   Drop support for Python 3.8 and 3.9.
 -   Remove previously deprecated code.
+-   Added warning that itsdangerous signs but does not encrypt data: the
+    payload is base64-encoded but readable by anyone who holds the token.
+    Sensitive data should not be placed in tokens without separate encryption.
+    Added the same note to ``README.md``.
+-   Documented that :exc:`~itsdangerous.exc.SignatureExpired` is raised
+    immediately during key rotation verification and does not fall through
+    to additional keys. Added ``test_secret_keys_expired`` to verify this.
+-   Added guidance on replacing the full secret key for immediate token
+    invalidation versus appending to the rotation list for graceful
+    rollover.
+-   Added security note that signed tokens are credentials and should not
+    be logged or exposed to unintended parties.
+-   Documented that ``key_derivation="none"`` on
+    :class:`~itsdangerous.signer.Signer` silently ignores the salt, defeating
+    context separation. Its use is discouraged.
+-   Added exception-handling guidance covering the ``BadData`` exception
+    hierarchy, safe catch-all patterns, and pitfalls such as exposing
+    exception payloads to users or catching exceptions too broadly.
 
 
 Version 2.2.0
