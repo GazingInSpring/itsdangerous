@@ -18,6 +18,8 @@ loading a token.
 Here's how you could generate a token for transmitting a user's id and
 name between web requests.
 
+itsdangerous has two main layers: a **Signer** that HMAC-signs raw bytes to detect tampering, and a **Serializer** that wraps a Signer to let you sign arbitrary Python objects (dicts, lists, etc.) by serializing them first. Most users want the Serializer (or one of its subclasses like `URLSafeSerializer`); reach for the Signer directly only when you're already working with bytes.
+
 ```python
 from itsdangerous import URLSafeSerializer
 auth_s = URLSafeSerializer("secret key", "auth")

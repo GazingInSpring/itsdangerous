@@ -53,8 +53,8 @@ Table of Contents
 .. toctree::
 
     concepts
-    serializer
     signer
+    serializer
     exceptions
     timed
     url_safe

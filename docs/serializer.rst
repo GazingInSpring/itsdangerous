@@ -41,9 +41,11 @@ payload if the signature check failed. This has to be done with extra
 care because at that point you know that someone tampered with your data
 but it might be useful for debugging purposes.
 
+This example uses :class:`~itsdangerous.url_safe.URLSafeSerializer` so the token is safe to pass in a URL or cookie, but the error handling pattern is the same for any serializer class.
+
 .. code-block:: python
 
-    from itsdangerous.serializer import Serializer
+    from itsdangerous.url_safe import URLSafeSerializer
     from itsdangerous.exc import BadSignature, BadData
 
     s = URLSafeSerializer("secret-key")
