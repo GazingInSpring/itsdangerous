@@ -113,3 +113,52 @@ class TestTimedSerializer(FreezeMixin, TestSerializer):
     def test_return_payload(self, serializer, value, ts):
         signed = serializer.dumps(value)
         assert serializer.loads(signed, return_timestamp=True) == (value, ts)
+
+    def test_fallback_signers_not_expired(self, serializer_factory, value):
+        """A token signed with the fallback algorithm loads successfully
+        when max_age has not elapsed yet."""
+        import hashlib
+
+        # Sign the value using a SHA-256 serializer (this becomes the "old" format).
+        sha256_serializer = serializer_factory(
+            signer_kwargs={"digest_method": hashlib.sha256}
+        )
+        signed = sha256_serializer.dumps(value)
+
+        # A new serializer uses SHA-512 as primary and SHA-256 as fallback.
+        fallback_serializer = serializer_factory(
+            signer_kwargs={"digest_method": hashlib.sha512},
+            fallback_signers=[{"digest_method": hashlib.sha256}],
+        )
+
+        # Token was just signed, so max_age=10 is plenty — should succeed.
+        assert fallback_serializer.loads(signed, max_age=10) == value
+
+    def test_fallback_signers_expired(self, serializer_factory, value, freeze):
+        """SignatureExpired is re-raised immediately when encountered inside
+        the fallback loop — the loop does NOT continue to the next signer."""
+        import hashlib
+
+        # Sign the value using a SHA-256 serializer (this becomes the "old" format).
+        sha256_serializer = serializer_factory(
+            signer_kwargs={"digest_method": hashlib.sha256}
+        )
+        signed = sha256_serializer.dumps(value)
+
+        # A new serializer uses SHA-512 as primary and SHA-256 as fallback.
+        fallback_serializer = serializer_factory(
+            signer_kwargs={"digest_method": hashlib.sha512},
+            fallback_signers=[{"digest_method": hashlib.sha256}],
+        )
+
+        # Advance the clock past max_age so the token is expired.
+        freeze.tick(timedelta(seconds=20))
+
+        # The primary signer (SHA-512) will raise BadSignature because the
+        # token was signed with SHA-256 — that is swallowed and the loop
+        # continues to the fallback.  The fallback (SHA-256) verifies the
+        # signature successfully but then sees the token is expired and raises
+        # SignatureExpired.  The short-circuit in the loop must re-raise it
+        # immediately instead of falling through to any further signer.
+        with pytest.raises(SignatureExpired):
+            fallback_serializer.loads(signed, max_age=10)

@@ -59,5 +59,6 @@ Table of Contents
     timed
     url_safe
     encoding
+    key-rotation
     license
     changes
